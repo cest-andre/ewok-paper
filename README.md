@@ -43,7 +43,7 @@ Any materials should appear in password-protected ZIP files.
 - :warning: Any use of EWoK materials in pretraining/training requires EXPLICIT ACKNOWLEDGMENT! This
 is explained in the TOU.
 
-**The password to the protected ZIP files is available in the TOU document.**
+**The password to the protected ZIP files is available in the [TOU document](https://github.com/ewok-core/ewok-paper/blob/26b56eeb9fc8d5081e3959cf52fefa796ec26f73/TERMS_OF_USE.txt#L54).**
 
 To further protect from pretraining, we include a canary string in many places to enable 
 detecting the inclusion of our data in model training.
@@ -66,9 +66,15 @@ Requirements: [Conda](https://docs.anaconda.com/free/miniconda/)
 # to create a conda env, 
 # install all dependencies, 
 # and prepare for execution:
-make setup # this is all you need to get setup!
+make setup # this is all you need to get setup! (this step will ask you for a password)
 conda activate ewok # activate the environment
 ```
+
+The password `make setup` will ask you for is in the [TOU document](https://github.com/ewok-core/ewok-paper/blob/26b56eeb9fc8d5081e3959cf52fefa796ec26f73/TERMS_OF_USE.txt#L54).
+> QUICK SUMMARY: [1] Do not put plain-text EWoK-generated data on the internet! (must be
+> password-protected/gated to prevent automatic crawlers).
+> [2] Explicitly report any use of EWoK towards training/improving models.
+
 
 ```bash
 # to test installation:
@@ -118,7 +124,7 @@ datasets!
 
 ```bibtex
 @article{ivanova2024elements,
-  title={Elements of World Knowledge (EWOK): A cognition-inspired framework for evaluating basic world knowledge in language models},
+  title={Elements of World Knowledge (EWoK): A cognition-inspired framework for evaluating basic world knowledge in language models},
   author={Anna A. Ivanova and Aalok Sathe and Benjamin Lipkin and Unnathi Kumar and Setayesh Radkani and Thomas H. Clark and Carina Kauf and Jennifer Hu and R. T. Pramod and Gabriel Grand and Vivian Paulun and Maria Ryskina and Ekin Akyurek and Ethan Wilcox and Nafisa Rashid and Leshem Choshen and Roger Levy and Evelina Fedorenko and Joshua Tenenbaum and Jacob Andreas},
   journal={arXiv preprint arXiv:2405.09605},
   year={2024},
