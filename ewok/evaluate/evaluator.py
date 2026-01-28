@@ -45,12 +45,22 @@ class Evaluator(Object):
         model: Model,
         targets: typing.Iterable[str],
         contexts: typing.Union[typing.Iterable[str], None] = None,
+        suite_id = None
     ) -> typing.List[float]:
         targets = list(targets)
         if contexts is None:
             contexts = [""] * len(targets)
         else:
             contexts = list(contexts)
+            #   NOTE:  prepends "perceptual steering" to context.  "Words that make language models perceive"
+            # ctx_mod = ''  #'Imagine what it would look like to see the following: '
+            #   TODO:  parse the suite_id to extract the domain, putting it into a suitable natural language form (eg, remove underscore)
+            # ctx_mod = f"Reason using your knowledge of {suite_id.split('-')[1].replace('_', ' ')} in the real world."
+            # print(ctx_mod)
+            # # if 'spatial_relations' in suite_id:
+            # #     ctx_mod = 'Reason using your knowledge of {} in the real world. '
+            # for i in range(len(contexts)):
+            #     contexts[i] = ctx_mod + contexts[i]
         self.info(
             f"Scoring `logP({identifier})` for each of the {len(targets)} samples."
         )
@@ -59,34 +69,38 @@ class Evaluator(Object):
     def _evaluate_logprobs(self, suite: TestSuite, model: Model) -> Results:
         results = pd.DataFrame(suite.samples)
         results["logp_target1"] = self._process_logprob_samples(
-            identifier="Target 1", model=model, targets=results["Target1"]
+            identifier="Target 1", model=model, targets=results["Target1"], suite_id=suite.identifier
         )
         results["logp_target2"] = self._process_logprob_samples(
-            identifier="Target 2", model=model, targets=results["Target2"]
+            identifier="Target 2", model=model, targets=results["Target2"], suite_id=suite.identifier
         )
         results["logp_target1_context1"] = self._process_logprob_samples(
             identifier="Target 1 | Context 1",
             model=model,
             targets=results["Target1"],
             contexts=results["Context1"],
+            suite_id=suite.identifier
         )
         results["logp_target2_context1"] = self._process_logprob_samples(
             identifier="Target 2 | Context 1",
             model=model,
             targets=results["Target2"],
             contexts=results["Context1"],
+            suite_id=suite.identifier
         )
         results["logp_target1_context2"] = self._process_logprob_samples(
             identifier="Target 1 | Context 2",
             model=model,
             targets=results["Target1"],
             contexts=results["Context2"],
+            suite_id=suite.identifier
         )
         results["logp_target2_context2"] = self._process_logprob_samples(
             identifier="Target 2 | Context 2",
             model=model,
             targets=results["Target2"],
             contexts=results["Context2"],
+            suite_id=suite.identifier
         )
         return Results(results, suite.identifier)
 

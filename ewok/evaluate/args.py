@@ -60,3 +60,6 @@ class Arguments:
     max_tokens: typing.Optional[int] = dataclasses.field(
         default=20,
     )
+    vlm_path: typing.Optional[str] = dataclasses.field(
+        default=None,
+    )

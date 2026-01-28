@@ -1,5 +1,6 @@
 import itertools
 import pathlib
+import torch
 
 from transformers import HfArgumentParser
 
@@ -19,6 +20,24 @@ def main() -> None:
         args.stop_token,
         args.max_tokens,
     )
+    results_label = ''
+    # results_label = 'LLAVA-TEXT-FINAL_'
+    if args.vlm_path is not None:
+        # base_state_dict = model.model.model
+        vlm_state_dict = torch.load(args.vlm_path)
+
+        rmv_ks = []
+        for k in vlm_state_dict.keys():
+            if 'mm_' in k:
+                rmv_ks.append(k)
+        
+        for k in rmv_ks:
+            del vlm_state_dict[k]
+
+        model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma and Llama :/
+        results_label = 'VLM-KNOWLEDGE_'
+        print('VLM LOAD SUCCESS')
+
     for mode in ["logprobs", "choice", "likert"]:
         if not getattr(args, f"score_{mode}"):
             continue
@@ -43,7 +62,7 @@ def main() -> None:
                             / args.custom_id
                             / dataset_cfg.name
                             / f"eval={'_'.join(x for x in (mode, gen_type, prompt_type) if x)}"
-                            / f"model={'_'.join(args.model_id.split('/')[-1].split('-'))}"
+                            / f"model={results_label}{'_'.join(args.model_id.split('/')[-1].split('-'))}"
                             / f"{result.identifier}.{args.output_ftype}"
                         ).as_posix(),
                         args.output_ftype,
