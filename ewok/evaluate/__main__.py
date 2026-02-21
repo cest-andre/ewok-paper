@@ -34,9 +34,13 @@ def main() -> None:
         for k in rmv_ks:
             del vlm_state_dict[k]
 
-        model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma and Llama :/
-        results_label = 'VLM-KNOWLEDGE_'
-        print('VLM LOAD SUCCESS')
+        model.model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma2 and Llama (not Gemma3) :/
+        results_label = 'VLM_'
+
+    if args.lora_path is not None:
+        from peft import PeftModel
+        model.model.model = PeftModel.from_pretrained(model.model.model, args.lora_path)
+        results_label = 'VLM-LORA_'
 
     for mode in ["logprobs", "choice", "likert"]:
         if not getattr(args, f"score_{mode}"):
