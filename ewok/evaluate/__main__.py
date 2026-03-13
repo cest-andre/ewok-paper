@@ -19,8 +19,9 @@ def main() -> None:
         args.hf_trust_remote_code,
         args.stop_token,
         args.max_tokens,
+        steer_layer=args.steer_layer
     )
-    results_label = ''
+    results_label = f'STEER-MLP-LAYER-{args.steer_layer}_'
     # results_label = 'LLAVA-TEXT-FINAL_'
     if args.vlm_path is not None:
         # base_state_dict = model.model.model
@@ -34,8 +35,8 @@ def main() -> None:
         for k in rmv_ks:
             del vlm_state_dict[k]
 
-        model.model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma2 and Llama (not Gemma3) :/
-        results_label = 'VLM_'
+        model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma2 and Llama (not Gemma3) :/
+        results_label = 'VLM-STEER-LAYER-NONE_'
 
     if args.lora_path is not None:
         from peft import PeftModel
@@ -59,6 +60,8 @@ def main() -> None:
             ):
                 dataset = Dataset.from_file(dataset_cfg.as_posix(), args.dataset_ftype)
                 results = evaluator.evaluate(dataset, model)
+                if results is None:
+                    continue
                 for result in results:
                     result.to_file(
                         (

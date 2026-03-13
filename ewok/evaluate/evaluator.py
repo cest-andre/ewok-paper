@@ -30,13 +30,13 @@ class Evaluator(Object):
             self._prompt_type = prompt_type
 
     def _process_logprob_samples_batched(
-        self, model: Model, targets: typing.List[str], contexts: typing.List[str]
+        self, model: Model, targets: typing.List[str], contexts: typing.List[str], suite_id
     ) -> typing.List[float]:
         results = []
         for i in tqdm.tqdm(range(0, len(targets), self._batch_size)):
             batch_targets = targets[i : i + self._batch_size]
             batch_contexts = contexts[i : i + self._batch_size]
-            results.extend(model.score(batch_targets, batch_contexts))
+            results.extend(model.score(batch_targets, batch_contexts, suite_id))
         return results
 
     def _process_logprob_samples(
@@ -52,7 +52,7 @@ class Evaluator(Object):
             contexts = [""] * len(targets)
         else:
             contexts = list(contexts)
-            #   NOTE:  prepends "perceptual steering" to context.  "Words that make language models perceive"
+            #   NOTE:  prepends "perceptual steering" to context.  see: "Words that make language models perceive"
             # ctx_mod = ''  #'Imagine what it would look like to see the following: '
             #   TODO:  parse the suite_id to extract the domain, putting it into a suitable natural language form (eg, remove underscore)
             # ctx_mod = f"Reason using your knowledge of {suite_id.split('-')[1].replace('_', ' ')} in the real world."
@@ -64,16 +64,17 @@ class Evaluator(Object):
         self.info(
             f"Scoring `logP({identifier})` for each of the {len(targets)} samples."
         )
-        return self._process_logprob_samples_batched(model, targets, contexts)
+        return self._process_logprob_samples_batched(model, targets, contexts, suite_id)
 
     def _evaluate_logprobs(self, suite: TestSuite, model: Model) -> Results:
         results = pd.DataFrame(suite.samples)
-        results["logp_target1"] = self._process_logprob_samples(
-            identifier="Target 1", model=model, targets=results["Target1"], suite_id=suite.identifier
-        )
-        results["logp_target2"] = self._process_logprob_samples(
-            identifier="Target 2", model=model, targets=results["Target2"], suite_id=suite.identifier
-        )
+        
+        # results["logp_target1"] = self._process_logprob_samples(
+        #     identifier="Target 1", model=model, targets=results["Target1"], suite_id=suite.identifier
+        # )
+        # results["logp_target2"] = self._process_logprob_samples(
+        #     identifier="Target 2", model=model, targets=results["Target2"], suite_id=suite.identifier
+        # )
         results["logp_target1_context1"] = self._process_logprob_samples(
             identifier="Target 1 | Context 1",
             model=model,
@@ -222,6 +223,7 @@ class Evaluator(Object):
     def evaluate(self, dataset: Dataset, model: Model) -> typing.List[Results]:
         results = []
         for suite in dataset.suites:
-            self.info(f"Evaluating `{suite.identifier}` {suite.name}")
-            results.append(self._evaluate_suite(suite, model))
+            if 'spatial_relations' in suite.identifier:
+                self.info(f"Evaluating `{suite.identifier}` {suite.name}")
+                results.append(self._evaluate_suite(suite, model))
         return results

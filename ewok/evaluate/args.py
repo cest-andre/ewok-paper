@@ -63,3 +63,9 @@ class Arguments:
     vlm_path: typing.Optional[str] = dataclasses.field(
         default=None,
     )
+    lora_path: typing.Optional[str] = dataclasses.field(
+        default=None,
+    )
+    steer_layer: typing.Optional[int] = dataclasses.field(
+        default=None,
+    )

@@ -17,6 +17,9 @@ from ewok.evaluate.util import (
     get_likert_regex,
 )
 
+import numpy as np
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 
 class Model(Object):
     def __init__(
@@ -27,15 +30,47 @@ class Model(Object):
         hf_trust_remote_code: bool,
         stop_token: str,
         max_tokens: int,
+        steer_layer=None,
     ):
         self.model_id = model_id
         try:
             self.info(f"Loading model {self.model_id} in {hf_precision} precision")
-            self.model = CausalHuggingFaceModel(
-                self.model_id,
-                precision=hf_precision,
-                trust_remote_code=hf_trust_remote_code,
-            )
+            self.steer_layer = steer_layer
+            if steer_layer is None:
+                self.model = CausalHuggingFaceModel(
+                    self.model_id,
+                    precision=hf_precision,
+                    trust_remote_code=hf_trust_remote_code,
+                )
+            else:
+                #   NOTE:  NNSIGHT HACKERY FOR ACTIVATION PATCHING
+                #   TODO:  Load layer's acts json file.
+                #   TODO:  HOW TO LOAD NNSIGHT MODEL WITH bf16 PRECISION
+                from nnsight import LanguageModel
+                self.model = CausalHuggingFaceModel(
+                    self.model_id,
+                    precision=hf_precision,
+                    trust_remote_code=hf_trust_remote_code,
+                )
+
+                # tokenizer = AutoTokenizer.from_pretrained(
+                #     self.model_id
+                # )
+                # self.model = AutoModelForCausalLM.from_pretrained(
+                #     self.model_id,
+                #     torch_dtype=torch.bfloat16,
+                #     trust_remote_code=hf_trust_remote_code,
+                #     device_map='cuda:6',
+                # )
+
+                # self.model = LanguageModel(self.model_id, device_map='cuda:6', dispatch=True)
+                self.model = LanguageModel(self.model.model, device_map='cuda:6', tokenizer=self.model.tokenizer)
+                self.item_counter = 0
+
+                import json
+                with open(f'/home/alongon/data/ewok/model_acts_steering/gemma-2-9b-it/vlm_spatial_relations_copies_post-ff-ln_layer{steer_layer}_all-token-acts.json') as json_file:
+                    self.steer_acts = json.load(json_file)['acts']
+
             self.device = self.model.device
             if hf_optimize:
                 self._optimize()
@@ -75,26 +110,73 @@ class Model(Object):
             self.model.tokenizer.pad_token = self.model.tokenizer.eos_token
 
     def _score(
-        self, targets: typing.List[str], contexts: typing.List[str]
+        self, targets: typing.List[str], contexts: typing.List[str], suite_id
     ) -> typing.List[float]:
         self._prep_tokenizer("right")
         queries = [f"{context} {target}" for target, context in zip(targets, contexts)]
-        surps = self.model.surprise(queries, use_bos_token=False)
-        starts = [
-            self.model.tokenize(context)["input_ids"].size()[1] if context else 0
-            for context in contexts
-        ]
-        stops = [self.model.tokenize(query)["input_ids"].size()[1] for query in queries]
-        return [
-            -surp.surprisals[start:stop].sum()
-            for surp, start, stop in zip(surps, starts, stops)
-        ]
+        assert len(queries) == 1
+
+        # # #   NOTE:  Writes eval text to file (do not make text publicly available on the web).  REMOVE ONCE NO LONGER NEEDED
+        # assert len(queries) == 1
+        # file_path = f'/home/alongon/data/ewok/text_dataset/{suite_id}_copies.txt'
+        # open(file_path, 'a')
+        # # not_written = False
+        # # with open(file_path, 'r') as file:
+        # #     txt = file.read()
+        # #     if queries[0] not in txt:
+        # #         not_written = True
+        
+        # # if not_written:
+        # with open(file_path, 'a') as file:
+        #     file.write(f'{queries[0]}\n')
+        # #
+        # return [0]
+
+        #   TODO:  Steer with nnsight.  Replace hf model with nnsight in init.  Define a counter attribute in this class, increment for each entry after steering.
+        #          Counter used to index into np array which contains all VLM activations for all tokens for all layers (MLPs initially).
+        #          Steer a particular layer, patching all acts token-wise.
+        #
+        #          Then, I'll need to compute surprisals myself I believe.  It might be too difficult to steer through the surprisal library.
+        #          Should just be a matter of taking output logits of all the target tokens (see "start:stop"), apply softmax, then take log.
+        #          Could check surprisal code for specific implementation.  Just need to ensure I do not negate the logProb, as we want the
+        #          logProbs themselves and not the surprisals.
+        if self.steer_layer is not None:
+            query = queries[0]
+            start_idx = len(self.model.tokenizer(contexts[0])['input_ids'])
+            tok_ids = self.model.tokenizer(query)['input_ids']
+            with torch.no_grad():
+                with self.model.trace(query):
+                    tensor_type = self.model.model.layers[self.steer_layer].post_feedforward_layernorm.output[0].dtype
+                    self.model.model.layers[self.steer_layer].post_feedforward_layernorm.output[0] = torch.tensor(self.steer_acts[self.item_counter], dtype=tensor_type).to(self.device)
+                    
+                    output = self.model.output.save()
+                    self.item_counter += 1
+            
+            #   NOTE:  convert logits to logprobs using same approach as done in surprisals library
+            outputs = output.logits
+            outputs[:, :, self.model.tokenizer.pad_token_id] = -float("inf")
+            target_logprob = torch.log_softmax(outputs[0, np.arange(start_idx, len(tok_ids)) - 1, :], dim=1)
+            target_logprob = target_logprob[np.arange(target_logprob.shape[0]), tok_ids[start_idx:len(tok_ids)]].cpu().float().numpy().sum()
+
+            return [target_logprob]
+        else:
+            surps = self.model.surprise(queries, use_bos_token=False)
+            starts = [
+                self.model.tokenize(context)["input_ids"].size()[1] if context else 0
+                for context in contexts
+            ]
+            stops = [self.model.tokenize(query)["input_ids"].size()[1] for query in queries]
+            
+            return [
+                -surp.surprisals[start:stop].sum()
+                for surp, start, stop in zip(surps, starts, stops)
+            ]
 
     def score(
-        self, targets: typing.List[str], contexts: typing.List[str]
+        self, targets: typing.List[str], contexts: typing.List[str], suite_id
     ) -> typing.List[float]:
         try:
-            return self._score(targets, contexts)
+            return self._score(targets, contexts, suite_id)
         except RuntimeError as error:
             if "out of memory" in str(error):
                 half = len(targets) // 2
