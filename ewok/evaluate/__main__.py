@@ -21,8 +21,9 @@ def main() -> None:
         args.max_tokens,
         steer_layer=args.steer_layer
     )
-    results_label = f'STEER-MLP-LAYER-{args.steer_layer}_'
+    # results_label = f'STEER-NORM-RESID-LAYER-{args.steer_layer}_'
     # results_label = 'LLAVA-TEXT-FINAL_'
+    results_label = ''
     if args.vlm_path is not None:
         # base_state_dict = model.model.model
         vlm_state_dict = torch.load(args.vlm_path)
@@ -35,8 +36,9 @@ def main() -> None:
         for k in rmv_ks:
             del vlm_state_dict[k]
 
-        model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma2 and Llama (not Gemma3) :/
-        results_label = 'VLM-STEER-LAYER-NONE_'
+        model.model.model.model.load_state_dict(vlm_state_dict)  #  need 4 'model's for Gemma2 and Llama (not Gemma3) :/
+        # results_label = 'VLM-STEER-LAYER-NONE_'
+        results_label = 'VLM_'
 
     if args.lora_path is not None:
         from peft import PeftModel

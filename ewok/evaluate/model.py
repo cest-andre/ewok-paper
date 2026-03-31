@@ -68,7 +68,7 @@ class Model(Object):
                 self.item_counter = 0
 
                 import json
-                with open(f'/home/alongon/data/ewok/model_acts_steering/gemma-2-9b-it/vlm_spatial_relations_copies_post-ff-ln_layer{steer_layer}_all-token-acts.json') as json_file:
+                with open(f'/home/alongon/data/ewok/model_acts_steering/gemma-2-9b-it/vlm_spatial_relations_copies_resid_layer{steer_layer}_all-token-acts.json') as json_file:
                     self.steer_acts = json.load(json_file)['acts']
 
             self.device = self.model.device
@@ -145,19 +145,23 @@ class Model(Object):
             start_idx = len(self.model.tokenizer(contexts[0])['input_ids'])
             tok_ids = self.model.tokenizer(query)['input_ids']
             with torch.no_grad():
+                steer_acts = torch.tensor(self.steer_acts[self.item_counter], dtype=torch.bfloat16).to(self.model.device)
+                #   shuffle across token dimension for random steer control.
+                # torch.manual_seed(13)
+                # steer_acts = steer_acts[torch.randperm(steer_acts.shape[0]), :]
                 with self.model.trace(query):
-                    tensor_type = self.model.model.layers[self.steer_layer].post_feedforward_layernorm.output[0].dtype
-                    self.model.model.layers[self.steer_layer].post_feedforward_layernorm.output[0] = torch.tensor(self.steer_acts[self.item_counter], dtype=tensor_type).to(self.device)
-                    
+                    llm_norms = torch.norm(self.model.model.layers[self.steer_layer].output[0][0], dim=1).to(self.model.device)
+                    steer_acts = torch.nn.functional.normalize(steer_acts, dim=1) * torch.broadcast_to(llm_norms[:, None], steer_acts.shape)
+                    self.model.model.layers[self.steer_layer].output[0][0] = steer_acts
+
                     output = self.model.output.save()
-                    self.item_counter += 1
-            
+                    
             #   NOTE:  convert logits to logprobs using same approach as done in surprisals library
             outputs = output.logits
             outputs[:, :, self.model.tokenizer.pad_token_id] = -float("inf")
             target_logprob = torch.log_softmax(outputs[0, np.arange(start_idx, len(tok_ids)) - 1, :], dim=1)
             target_logprob = target_logprob[np.arange(target_logprob.shape[0]), tok_ids[start_idx:len(tok_ids)]].cpu().float().numpy().sum()
-
+            self.item_counter += 1
             return [target_logprob]
         else:
             surps = self.model.surprise(queries, use_bos_token=False)

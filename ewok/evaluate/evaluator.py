@@ -223,7 +223,7 @@ class Evaluator(Object):
     def evaluate(self, dataset: Dataset, model: Model) -> typing.List[Results]:
         results = []
         for suite in dataset.suites:
-            if 'spatial_relations' in suite.identifier:
-                self.info(f"Evaluating `{suite.identifier}` {suite.name}")
-                results.append(self._evaluate_suite(suite, model))
+            # if 'spatial_relations' in suite.identifier:
+            self.info(f"Evaluating `{suite.identifier}` {suite.name}")
+            results.append(self._evaluate_suite(suite, model))
         return results
